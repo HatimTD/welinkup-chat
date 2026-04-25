@@ -1,7 +1,7 @@
 /**
  * AI Ads Cron Jobs
  * Runs inside the Socket.io chat server to:
- * 1. Poll campaigns for changes (Meta, TikTok, Google Ads)
+ * 1. Poll campaigns for changes (Meta, TikTok, Google Ads, Snapchat, Pinterest, LinkedIn)
  * 2. Evaluate automated rules
  * 3. Weekly digest, anomaly detection, ad spy
  * 4. Push real-time notifications via Socket.io
@@ -60,23 +60,44 @@ async function callCronEndpoint(path, label) {
 }
 
 /**
- * Run all campaign polls (Meta + TikTok + Google) in parallel
+ * Run all campaign polls (Meta + TikTok + Google + Snapchat + Pinterest + LinkedIn) in parallel.
+ * Each platform's endpoint is independent — Promise.allSettled ensures one failing platform
+ * doesn't block the others.
  */
 async function runCampaignPolls() {
   console.log("[AI Ads Cron] ⏰ Running campaign polls...")
 
-  const [metaResult, tiktokResult, googleResult] = await Promise.allSettled([
+  const [metaResult, tiktokResult, googleResult, snapchatResult, pinterestResult, linkedinResult] = await Promise.allSettled([
     callCronEndpoint("/api/cron/meta-poll", "Meta Poll"),
     callCronEndpoint("/api/cron/tiktok-poll", "TikTok Poll"),
     callCronEndpoint("/api/cron/google-poll", "Google Poll"),
+    callCronEndpoint("/api/cron/snapchat-poll", "Snapchat Poll"),
+    callCronEndpoint("/api/cron/pinterest-poll", "Pinterest Poll"),
+    callCronEndpoint("/api/cron/linkedin-poll", "LinkedIn Poll"),
   ])
 
-  const results = { meta: metaResult, tiktok: tiktokResult, google: googleResult }
+  const results = {
+    meta: metaResult,
+    tiktok: tiktokResult,
+    google: googleResult,
+    snapchat: snapchatResult,
+    pinterest: pinterestResult,
+    linkedin: linkedinResult,
+  }
 
-  for (const [label, result] of [["Meta", metaResult], ["TikTok", tiktokResult], ["Google", googleResult]]) {
+  for (const [label, result] of [
+    ["Meta", metaResult],
+    ["TikTok", tiktokResult],
+    ["Google", googleResult],
+    ["Snapchat", snapchatResult],
+    ["Pinterest", pinterestResult],
+    ["LinkedIn", linkedinResult],
+  ]) {
     if (result.status === "fulfilled" && result.value?.success) {
       const v = result.value.data
-      console.log(`[AI Ads Cron] ${label} Poll: ${v?.totalNotifications || 0} notifications, ${v?.totalPolled || v?.usersProcessed || 0} users`)
+      // Note: each fb-automation endpoint shapes its response slightly differently
+      // (totalNotifications vs total_changes; usersProcessed vs users_processed).
+      console.log(`[AI Ads Cron] ${label} Poll: ${v?.totalNotifications || v?.total_changes || 0} notifications, ${v?.totalPolled || v?.users_processed || v?.usersProcessed || 0} users`)
     } else {
       console.log(`[AI Ads Cron] ${label} Poll: skipped or failed`)
     }
@@ -86,20 +107,38 @@ async function runCampaignPolls() {
 }
 
 /**
- * Run all rules evaluations (Meta + TikTok + Google) in parallel
+ * Run all rules evaluations (Meta + TikTok + Google + Snapchat + Pinterest + LinkedIn) in parallel.
+ * Snapchat + Pinterest endpoints are stubs on the fb-automation side until full evaluators ship.
  */
 async function runRulesEvaluation() {
   console.log("[AI Ads Cron] ⏰ Running rules evaluation...")
 
-  const [metaResult, tiktokResult, googleResult] = await Promise.allSettled([
+  const [metaResult, tiktokResult, googleResult, snapchatResult, pinterestResult, linkedinResult] = await Promise.allSettled([
     callCronEndpoint("/api/cron/meta-evaluate-rules", "Meta Rules"),
     callCronEndpoint("/api/cron/tiktok-evaluate-rules", "TikTok Rules"),
     callCronEndpoint("/api/cron/google-evaluate-rules", "Google Rules"),
+    callCronEndpoint("/api/cron/snapchat-evaluate-rules", "Snapchat Rules"),
+    callCronEndpoint("/api/cron/pinterest-evaluate-rules", "Pinterest Rules"),
+    callCronEndpoint("/api/cron/linkedin-evaluate-rules", "LinkedIn Rules"),
   ])
 
-  const results = { meta: metaResult, tiktok: tiktokResult, google: googleResult }
+  const results = {
+    meta: metaResult,
+    tiktok: tiktokResult,
+    google: googleResult,
+    snapchat: snapchatResult,
+    pinterest: pinterestResult,
+    linkedin: linkedinResult,
+  }
 
-  for (const [label, result] of [["Meta", metaResult], ["TikTok", tiktokResult], ["Google", googleResult]]) {
+  for (const [label, result] of [
+    ["Meta", metaResult],
+    ["TikTok", tiktokResult],
+    ["Google", googleResult],
+    ["Snapchat", snapchatResult],
+    ["Pinterest", pinterestResult],
+    ["LinkedIn", linkedinResult],
+  ]) {
     if (result.status === "fulfilled" && result.value?.success) {
       const v = result.value.data
       console.log(`[AI Ads Cron] ${label} Rules: ${v?.triggered || 0} triggered, ${v?.evaluated || 0} evaluated`)
@@ -188,8 +227,8 @@ function initAiAdsCron(io) {
   )
 
   console.log("[AI Ads Cron] Cron jobs initialized:")
-  console.log("  - Campaign polls:      every 15 min  (Meta + TikTok + Google)")
-  console.log("  - Rules evaluation:    every 15 min  (offset +7 min)")
+  console.log("  - Campaign polls:      every 15 min  (Meta + TikTok + Google + Snapchat + Pinterest + LinkedIn)")
+  console.log("  - Rules evaluation:    every 15 min  (offset +7 min — 6 platforms)")
   console.log("  - Anomaly detection:   every 6 hours")
   console.log("  - Ad spy poll:         every 30 min")
   console.log("  - Sched. activations:  every 1 min")
