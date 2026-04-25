@@ -177,6 +177,15 @@ async function runScheduledActivations() {
 }
 
 /**
+ * Reset Welinkup AI credits for users whose billing cycle rolled over.
+ * Only refills users whose plan still grants credits — handles plan
+ * downgrade between cycles. Daily.
+ */
+async function runResetWelinkupCredits() {
+  return callCronEndpoint("/api/cron/reset-welinkup-credits", "Reset Welinkup Credits")
+}
+
+/**
  * Initialize all AI Ads cron jobs
  * @param {import("socket.io").Server} io - Socket.io server instance
  */
@@ -219,6 +228,11 @@ function initAiAdsCron(io) {
     cron.schedule("0 8 * * 0", runWeeklyDigest, { timezone: "Africa/Casablanca" })
   )
 
+  // ── Reset Welinkup AI Credits — daily at 4:00 AM ──
+  scheduledTasks.push(
+    cron.schedule("0 4 * * *", runResetWelinkupCredits, { timezone: "Africa/Casablanca" })
+  )
+
   // ── Health check — every hour ──
   scheduledTasks.push(
     cron.schedule("0 * * * *", () => {
@@ -233,6 +247,7 @@ function initAiAdsCron(io) {
   console.log("  - Ad spy poll:         every 30 min")
   console.log("  - Sched. activations:  every 1 min")
   console.log("  - Weekly digest:       Sundays 8:00 AM")
+  console.log("  - Welinkup credits:    daily at 4:00 AM (cycle reset)")
   console.log("  - Health check:        every hour")
   console.log(`  - Target: ${FB_APP_URL}`)
   console.log(`  - Timezone: Africa/Casablanca`)
@@ -273,4 +288,5 @@ module.exports = {
   runAnomalyDetection,
   runAdSpyPoll,
   runScheduledActivations,
+  runResetWelinkupCredits,
 }
